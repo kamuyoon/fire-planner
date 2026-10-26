@@ -316,14 +316,20 @@ function countOf(L,N,defStart){
   return N?(N-st+1)+e:null;
 }
 let P=null;
+const pos0=(s,N)=>Math.min(Math.max(num((S.startAt||{})[s])||1,1),N)-1;
 function compute(){
   const R={};
   for(const s of SUBS){
     const N=num(S.pages[s]),ends=S.rounds[s]||[];
     const H=ALL.map(d=>hrs(d,s));
-    let cum=0,pos=N?Math.min(Math.max(num((S.startAt||{})[s])||1,1),N)-1:0;R[s]={};
+    // 진도 = 페이지 위치. 시작 p를 260으로 적으면 1~259p는 이번 회독에서 이미 본 것으로 봄.
+    let round=1,pos=N?Math.min(Math.max(num((S.startAt||{})[s])||1,1),N)-1:0,done=null;R[s]={};
     ALL.forEach((d,i)=>{
       const h=H[i];let t=null,k=-1;
+      if(N&&pos>=N){round++;pos=0}
+      const L=logOf(d,s),ls=L&&num(L.s);
+      if(N&&ls!=null)pos=Math.min(Math.max(ls,1),N)-1;
+      const cum=N?(round-1)*N+pos:0;
       if(N&&h>0){
         k=ends.findIndex(e=>e>=d);
         while(k>=0&&k<ends.length&&(k+1)*N-cum<=0)k++;
@@ -332,17 +338,16 @@ function compute(){
           t=Math.max(1,Math.ceil(((k+1)*N-cum)*h/Hs));
         }else if(k>=ends.length)t=0;
       }
-      if(pos>=N)pos=0;
-      const L=logOf(d,s),ls=L&&num(L.s);
-      if(N&&ls!=null)pos=Math.min(Math.max(ls,1),N)-1;
       const startPg=N?pos+1:null;
       const a=countOf(L,N,startPg||1);
-      const rec={t,h,N,cum0:cum,pos0:pos,round:N?Math.floor(cum/N)+1:null,startPg,a,L,k};
-      if(a!=null){cum+=a;pos=num(L.e)}
-      else if(d>=TODAY&&t){cum+=t;pos=N?((pos+t-1)%N)+1:0}
+      const rec={t,h,N,cum0:cum,round:N?round:null,startPg,a,L,k};
+      if(a!=null){const e=num(L.e);if(e<startPg)round++;pos=Math.min(e,N)}
+      else if(N&&d>=TODAY&&t){pos+=t;while(pos>N){pos-=N;round++}}
+      rec.after=N?(round-1)*N+pos:0;
+      if(d<TODAY||(d===TODAY&&a!=null))done=rec.after;
       R[s][d]=rec;
     });
-    R[s].done=ALL.reduce((x,d)=>x+(R[s][d].a||0),0);
+    R[s].done=done??(N?pos0(s,N):0);
   }
   return R;
 }
@@ -498,7 +503,7 @@ function vPlan(){
       <label class="tot">1회독 시작 페이지 <input type="number" min="1" inputmode="numeric" id="sa-${s}" data-f="startAt" data-s="${s}" value="${S.startAt[s]??''}" placeholder="1">p</label>
       <div class="rounds">${ends.map((e,k)=>{
         const done=N?Math.max(0,Math.min(N,dn-k*N)):0;
-        const proj=N?ALL.find(d=>{const x=P[s][d];const after=x.cum0+(x.a!=null?x.a:(d>=TODAY?(x.t||0):0));return after>=(k+1)*N}):null;
+        const proj=N?ALL.find(d=>{const x=P[s][d];return x.after>=(k+1)*N}):null;
         const st=!N?'':done>=N?'완료':e<TODAY?`마감 지남 · ${done}/${N}p`:done>0?`진행 중 ${done}/${N}p`:'예정';
         return `<div class="rd"><span class="k">${k+1}회독</span><input type="date" id="rd-${s}-${k}" data-f="rend" data-s="${s}" data-k="${k}" value="${e}" min="${START}" max="${END}" aria-label="${k+1}회독 마감일"><button data-act="rdel" data-s="${s}" data-k="${k}">삭제</button>
           <span class="st">${k===0?'시작':md(addD(ends[k-1],1))} ~ ${md(e)} 마감${st?' · '+st:''}${proj&&done<N?` · 예상 완료 ${md(proj)}`:''}</span>
