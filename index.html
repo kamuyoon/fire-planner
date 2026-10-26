@@ -261,7 +261,7 @@ const GATES={
 
 /* 상태 (이 브라우저 localStorage) */
 const KEY='fire123-planner-v2';
-const blank=()=>({v:2,updatedAt:0,pages:clone(DEF.pages),rounds:clone(DEF.rounds),phases:clone(DEF.phases),log:{},hours:{},off:{},todo:{},notes:{},gates:{},mocks:{}});
+const blank=()=>({v:2,updatedAt:0,pages:clone(DEF.pages),startAt:{},rounds:clone(DEF.rounds),phases:clone(DEF.phases),log:{},hours:{},off:{},todo:{},notes:{},gates:{},mocks:{}});
 const norm=j=>Object.assign(blank(),j||{});
 let S=(()=>{try{const j=JSON.parse(localStorage.getItem(KEY));if(j&&j.v===2)return norm(j)}catch(e){}return blank()})();
 function persist(){
@@ -321,7 +321,7 @@ function compute(){
   for(const s of SUBS){
     const N=num(S.pages[s]),ends=S.rounds[s]||[];
     const H=ALL.map(d=>hrs(d,s));
-    let cum=0,pos=0;R[s]={};
+    let cum=0,pos=N?Math.min(Math.max(num((S.startAt||{})[s])||1,1),N)-1:0;R[s]={};
     ALL.forEach((d,i)=>{
       const h=H[i];let t=null,k=-1;
       if(N&&h>0){
@@ -333,8 +333,10 @@ function compute(){
         }else if(k>=ends.length)t=0;
       }
       if(pos>=N)pos=0;
+      const L=logOf(d,s),ls=L&&num(L.s);
+      if(N&&ls!=null)pos=Math.min(Math.max(ls,1),N)-1;
       const startPg=N?pos+1:null;
-      const L=logOf(d,s),a=countOf(L,N,startPg||1);
+      const a=countOf(L,N,startPg||1);
       const rec={t,h,N,cum0:cum,pos0:pos,round:N?Math.floor(cum/N)+1:null,startPg,a,L,k};
       if(a!=null){cum+=a;pos=num(L.e)}
       else if(d>=TODAY&&t){cum+=t;pos=N?((pos+t-1)%N)+1:0}
@@ -415,7 +417,8 @@ function subRow(d,s){
     tgt=`<b>${r.t}p</b><span>${r.h}h · 시간당 ${Math.ceil(r.t/r.h)}p</span>`;
   }
   let res='';
-  if(r.a!=null)res=`<span class="res ${rcls(r.t?r.a/r.t:1)}">${r.a}p 완료${r.t?` · ${pct(r.a/r.t)}`:''}</span>`;
+  if(r.a!=null)res=`<span class="res ${rcls(r.t?r.a/r.t:1)}">${r.startPg}~${L.e}p · ${r.a}p 완료${r.t?` · ${pct(r.a/r.t)}`:''}</span>`;
+  else if(L.s!=null&&r.t)res=`<span class="res muted">${L.s}p부터 시작 → 끝 p를 입력하세요</span>`;
   else if(N&&r.t&&d<TODAY)res='<span class="res r-b">기록 없음 · 0p로 계산됨</span>';
   return `<div class="sub s-${s}${r.h===0&&r.a==null?' zero':''}" style="--p:${p}">
     <div class="n">${SN[s]}${N?`<small>총 ${N}p</small>`:''}</div>
@@ -492,6 +495,7 @@ function vPlan(){
     const N=num(S.pages[s]),ends=S.rounds[s],dn=P[s].done;
     h+=`<div class="plan s-${s}"><h3>${SN[s]} 기출</h3>
       <label class="tot">총 페이지 <input type="number" min="1" inputmode="numeric" id="pg-${s}" data-f="pages" data-s="${s}" value="${N??''}" placeholder="입력">p</label>
+      <label class="tot">1회독 시작 페이지 <input type="number" min="1" inputmode="numeric" id="sa-${s}" data-f="startAt" data-s="${s}" value="${S.startAt[s]??''}" placeholder="1">p</label>
       <div class="rounds">${ends.map((e,k)=>{
         const done=N?Math.max(0,Math.min(N,dn-k*N)):0;
         const proj=N?ALL.find(d=>{const x=P[s][d];const after=x.cum0+(x.a!=null?x.a:(d>=TODAY?(x.t||0):0));return after>=(k+1)*N}):null;
@@ -596,6 +600,7 @@ V.addEventListener('change',e=>{
   else if(f==='tdc')S.todo[d][i].done=el.checked;
   else if(f==='tdt')S.todo[d][i].t=el.value;
   else if(f==='pages')S.pages[s]=num(el.value);
+  else if(f==='startAt'){const v=num(el.value);if(v==null||v===1)delete S.startAt[s];else S.startAt[s]=v}
   else if(f==='rend'){if(!el.value)return;S.rounds[s][+k]=el.value;S.rounds[s].sort()}
   else if(f==='ph'){const p=S.phases[i];if(k==='from'){if(!el.value)return;p.from=el.value;S.phases.sort((x,y)=>x.from<y.from?-1:1)}else p[k]=num(el.value)??0}
   else if(f==='mock'){const m=S.mocks[d]||(S.mocks[d]={});if(k==='memo')m.memo=el.value;else{const v=num(el.value);if(v==null)delete m[k];else m[k]=v}}
