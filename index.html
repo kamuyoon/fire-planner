@@ -114,6 +114,10 @@ button{cursor:pointer}
 .sub .n small{display:block;font-family:var(--f-mono);font-size:11px;font-weight:500;color:var(--muted)}
 .sub .info{grid-area:info;min-width:0}
 .sub .info .rg{font-family:var(--f-mono);font-size:15px;font-weight:600}
+.cps{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.cps span{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+.cps i{font-style:normal;color:var(--sc);font-weight:600}
+.sub .tgt b small{font-size:12px;font-weight:500}
 .sub .info .why{font-size:12px;color:var(--muted)}
 .sub .tgt{grid-area:tgt;text-align:right}
 .sub .tgt b{font-family:var(--f-mono);font-size:22px;color:var(--sc)}
@@ -408,6 +412,7 @@ function renderOMR(){
   document.getElementById('omr').innerHTML=h;
 }
 
+const fmtSec=x=>{x=Math.round(x);return x>=60?`${Math.floor(x/60)}분 ${String(x%60).padStart(2,'0')}초`:`${x}초`};
 function subRow(d,s){
   const r=P[s][d],N=r.N,L=r.L||{},id=k=>`l-${d}-${s}-${k}`,at=`data-d="${d}" data-s="${s}"`;
   const p=r.t?Math.min(1,(r.a||0)/r.t):0;
@@ -417,12 +422,15 @@ function subRow(d,s){
   else if(r.t===0){info=`<div class="why">모든 회독 목표 달성</div>`;tgt=''}
   else{
     const end=S.rounds[s][r.k];
-    const behind=r.cum0-(r.k)*N;
-    info=`<div class="rg">${rangeTxt(r)}</div><div class="why">${r.k+1}회독 마감 ${md(end)} · 마감까지 남은 ${(r.k+1)*N-r.cum0}p를 시간 비율로 나눔</div>`;
-    tgt=`<b>${r.t}p</b><span>${r.h}h · 시간당 ${Math.ceil(r.t/r.h)}p</span>`;
+    const per=Math.ceil(r.t/r.h),cps=[];
+    for(let i=1;i<r.h;i++)cps.push(i);
+    cps.push(r.h);
+    const cp=cps.map(x=>`<span><i>${x}h</i> ${((r.startPg-1+Math.ceil(r.t*x/r.h)-1)%N)+1}p</span>`).join('');
+    info=`<div class="rg">${rangeTxt(r)}</div><div class="cps" aria-label="시간별 도달 페이지">${cp}</div><div class="why">${r.k+1}회독 마감 ${md(end)} · 마감까지 남은 ${(r.k+1)*N-r.cum0}p를 시간 비율로 나눔</div>`;
+    tgt=`<b>${per}p<small>/h</small></b><span>오늘 ${r.t}p · ${r.h}h</span><span>1p당 ${fmtSec(r.h*3600/r.t)}</span>`;
   }
   let res='';
-  if(r.a!=null)res=`<span class="res ${rcls(r.t?r.a/r.t:1)}">${r.startPg}~${L.e}p · ${r.a}p 완료${r.t?` · ${pct(r.a/r.t)}`:''}</span>`;
+  if(r.a!=null)res=`<span class="res ${rcls(r.t?r.a/r.t:1)}">${r.startPg}~${L.e}p · ${r.a}p 완료${r.t?` · ${pct(r.a/r.t)}`:''}${r.h?` · 실제 시간당 ${Math.round(r.a/r.h)}p`:''}</span>`;
   else if(L.s!=null&&r.t)res=`<span class="res muted">${L.s}p부터 시작 → 끝 p를 입력하세요</span>`;
   else if(N&&r.t&&d<TODAY)res='<span class="res r-b">기록 없음 · 0p로 계산됨</span>';
   return `<div class="sub s-${s}${r.h===0&&r.a==null?' zero':''}" style="--p:${p}">
@@ -487,7 +495,7 @@ function vAll(){
     const w=wk(d);
     if(w!==lw){lw=w;const ds=ALL.filter(x=>wk(x)===w);h+=`<tr class="wsep"><td colspan="6">W${w} · ${md(ds[0])} – ${md(ds.at(-1))} · 주간 ${pct(weekRate(w))}</td></tr>`}
     const r=dayRate(d);
-    const cell=s=>{const x=P[s][d];if(!x.N)return x.h?`<span class="muted">${x.h}h</span>`:'';if(!x.t&&x.a==null)return '';return `<div class="cell"><span class="rr c-${s}">${rangeTxt(x,true)}</span>${x.t?` <b>${x.t}p</b>`:''}${x.a!=null?`<div class="ac ${rcls(x.t?x.a/x.t:1)}">실제 ${x.a}p</div>`:''}</div>`};
+    const cell=s=>{const x=P[s][d];if(!x.N)return x.h?`<span class="muted">${x.h}h</span>`:'';if(!x.t&&x.a==null)return '';return `<div class="cell"><span class="rr c-${s}">${rangeTxt(x,true)}</span>${x.t?` <b>${x.t}p</b> <span class="muted">${Math.ceil(x.t/x.h)}p/h</span>`:''}${x.a!=null?`<div class="ac ${rcls(x.t?x.a/x.t:1)}">실제 ${x.a}p</div>`:''}</div>`};
     const ev=events(d).filter(e=>e.m).map(e=>'모의고사');
     h+=`<tr class="click${d===TODAY?' today':''}${d<TODAY?' past':''}" data-act="sel" data-d="${d}"><td class="date">${md(d)} ${WD[dow(d)]}</td><td>${cell('haeng')}</td><td>${cell('beop')}</td><td>${cell('hak')}</td><td class="small">${S.off[d]?'휴식':ev.join('')}</td><td class="num n ${rcls(r)}">${pct(r)}</td></tr>`;
   }
