@@ -344,6 +344,8 @@ function compute(){
   for(const s of SUBS){
     const N=num(S.pages[s]),ends=S.rounds[s]||[];
     const H=ALL.map(d=>hrs(d,s));
+    // 목표 계산용 시간: 기본 배정보다 더 넣은 시간은 재량이라 목표를 키우지 않음 (줄인 날은 줄인 만큼 반영)
+    const HT=ALL.map((d,i)=>{const b=S.off[d]?0:(num(defHours(d)[s])||0);return b>0?Math.min(H[i],b):H[i]});
     // 진도 = 페이지 위치. 시작 p를 260으로 적으면 1~259p는 이번 회독에서 이미 본 것으로 봄.
     let round=1,pos=N?Math.min(Math.max(num((S.startAt||{})[s])||1,1),N)-1:0,done=null;R[s]={};
     ALL.forEach((d,i)=>{
@@ -356,8 +358,8 @@ function compute(){
         k=ends.findIndex(e=>e>=d);
         while(k>=0&&k<ends.length&&(k+1)*N-cum<=0)k++;
         if(k>=0&&k<ends.length){
-          let Hs=0;for(let j=i;j<ALL.length&&ALL[j]<=ends[k];j++)Hs+=H[j];
-          t=Math.max(1,Math.ceil(((k+1)*N-cum)*h/Hs));
+          let Hs=0;for(let j=i;j<ALL.length&&ALL[j]<=ends[k];j++)Hs+=HT[j];
+          t=Math.max(1,Math.ceil(((k+1)*N-cum)*HT[i]/Hs));
         }else if(k>=ends.length)t=0;
       }
       const startPg=N?pos+1:null;
