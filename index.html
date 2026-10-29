@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>소방 123일 플래너</title>
+<title>소방 기출회독 플래너</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@700;800&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
@@ -248,7 +248,7 @@ function setup(){
   MOCK_J=MJ_OFF.map(o=>addD(END,o)).filter(d=>d>=START);
   MOCK_F=MF_OFF.map(o=>addD(END,o)).filter(d=>d>=START);
   MOCKS=[...MOCK_J,...MOCK_F];MOCK_START=MOCK_F[0]||END;
-  document.title=`소방 ${ALL.length}일 플래너`;
+  document.title=`소방 기출회독 플래너`;
 }
 // 시험일 변경: 막판 5주(모의·압축 구간)의 날짜는 시험일과 같이 움직이고, 앞쪽 일정은 그대로 둠
 function changeExam(nx){
@@ -343,7 +343,7 @@ function compute(){
   const R={};
   for(const s of SUBS){
     const N=num(S.pages[s]),ends=S.rounds[s]||[];
-    const H=ALL.map(d=>hrs(d,s));
+    const H=ALL.map(d=>hrs(d,s)),D=ALL.map(d=>num(defHours(d)[s])||0);
     // 목표 계산용 시간: 기본 배정보다 더 넣은 시간은 재량이라 목표를 키우지 않음 (줄인 날은 줄인 만큼 반영)
     const HT=ALL.map((d,i)=>{const b=S.off[d]?0:(num(defHours(d)[s])||0);return b>0?Math.min(H[i],b):H[i]});
     // 진도 = 페이지 위치. 시작 p를 260으로 적으면 1~259p는 이번 회독에서 이미 본 것으로 봄.
@@ -358,7 +358,8 @@ function compute(){
         k=ends.findIndex(e=>e>=d);
         while(k>=0&&k<ends.length&&(k+1)*N-cum<=0)k++;
         if(k>=0&&k<ends.length){
-          let Hs=0;for(let j=i;j<ALL.length&&ALL[j]<=ends[k];j++)Hs+=HT[j];
+          // 지난 날은 그 뒤 날들을 기본 시간으로 보고 계산 → 오늘 시간·쉬는 날을 바꿔도 지난 날 %가 변하지 않음
+          let Hs=HT[i];for(let j=i+1;j<ALL.length&&ALL[j]<=ends[k];j++)Hs+=d<TODAY?D[j]:HT[j];
           t=Math.max(1,Math.ceil(((k+1)*N-cum)*HT[i]/Hs));
         }else if(k>=ends.length)t=0;
       }
@@ -407,7 +408,7 @@ function later(){setTimeout(()=>{const id=document.activeElement&&document.activ
 
 function renderStats(){
   const left=diff(EXAM,TODAY),inR=TODAY>=START&&TODAY<=END;
-  document.getElementById('brand').innerHTML=`<h1>소방 <em>${ALL.length}</em>일 플래너</h1><p>행정법 · 소방법규 · 소방학개론 기출 &nbsp;|&nbsp; ${START.slice(0,4)}.${md(START).replace('/','.')}(${WD[dow(START)]}) 시작 → 시험 ${EXAM.slice(0,4)}.${md(EXAM).replace('/','.')}(${WD[dow(EXAM)]})</p>`;
+  document.getElementById('brand').innerHTML=`<h1>소방 <em>기출회독</em> 플래너</h1><p>행정법 · 소방법규 · 소방학개론 기출 &nbsp;|&nbsp; ${START.slice(0,4)}.${md(START).replace('/','.')}(${WD[dow(START)]}) 시작 → 시험 ${EXAM.slice(0,4)}.${md(EXAM).replace('/','.')}(${WD[dow(EXAM)]})</p>`;
   const items=[['시험까지',left>0?`D-${left}`:left===0?'D-DAY':'종료',''],['이번 주 달성',inR?pct(weekRate(wk(TODAY))):'–','']];
   for(const s of SUBS){
     const N=num(S.pages[s]),dn=P[s].done;
