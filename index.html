@@ -114,6 +114,10 @@ button{cursor:pointer}
 .sub .n small{display:block;font-family:var(--f-mono);font-size:11px;font-weight:500;color:var(--muted)}
 .sub .info{grid-area:info;min-width:0}
 .sub .info .rg{font-family:var(--f-mono);font-size:15px;font-weight:600}
+.sub .stg{font-size:12px;font-weight:600;color:var(--sc);letter-spacing:.02em}
+.sub .tipl{margin-top:2px;color:var(--ink);opacity:.75}
+.rd select,.rd .w{border:1px solid var(--line);border-radius:5px;padding:3px 4px;background:var(--surface);font-size:12px;min-width:0}
+.rd .w{width:52px;font-family:var(--f-mono);text-align:right}
 .cps{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
 .cps span{font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);border-radius:5px;padding:1px 6px}
 .cps i{font-style:normal;color:var(--sc);font-weight:600}
@@ -182,6 +186,9 @@ input[type=date].tin{font-family:var(--f-mono);min-width:130px}
 .rounds{display:grid;gap:6px}
 .rd{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:4px 8px;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line)}
 .rd .k{font-family:var(--f-mono);font-weight:600}
+.rd .ctl{display:flex;gap:4px;min-width:0}
+.rd .ctl input[type=date]{flex:1}
+.rd.ns{border-top:2px solid var(--line);margin-top:4px}
 .rd .st{grid-column:2/4;font-size:12px;color:var(--muted)}
 .rd .bar{grid-column:1/4;height:4px;border-radius:2px;background:var(--bg);overflow:hidden}
 .rd .bar i{display:block;height:100%;background:var(--sc)}
@@ -255,7 +262,6 @@ function changeStart(ns){
   const zone=addD(END,-35),delta=diff(ns,START);
   S.start=ns;setup();
   const cl=d=>d<START?START:d>END?END:d,sh=d=>cl(d<zone?addD(d,delta):d);
-  for(const s of SUBS)S.rounds[s]=S.rounds[s].map(sh).sort();
   S.phases.forEach(p=>p.from=sh(p.from));S.phases.sort((x,y)=>x.from<y.from?-1:1);S.phases[0].from=START;
 }
 // 시험일 변경: 막판 5주(모의·압축 구간)의 날짜는 시험일과 같이 움직이고, 앞쪽 일정은 그대로 둠
@@ -263,17 +269,11 @@ function changeExam(nx){
   const oldEND=END,oldMocks=MOCKS.slice(),zone=addD(oldEND,-35);
   S.exam=nx;setup();
   const delta=diff(END,oldEND),cl=d=>d<START?START:d>END?END:d,sh=d=>cl(d>=zone?addD(d,delta):d);
-  for(const s of SUBS)S.rounds[s]=S.rounds[s].map(sh).sort();
   S.phases.forEach(p=>p.from=sh(p.from));S.phases.sort((x,y)=>x.from<y.from?-1:1);
   const nm={};for(const [d,v] of Object.entries(S.mocks)){const i=oldMocks.indexOf(d);nm[i>=0&&MOCKS[i]?MOCKS[i]:d]=v}S.mocks=nm;
 }
 const DEF={
   pages:{haeng:1100,beop:null,hak:null},
-  rounds:{
-    haeng:['2026-11-02','2026-11-06','2026-11-09','2026-11-30','2026-12-28','2027-01-22','2027-02-01','2027-02-26'],
-    beop:['2026-11-17','2026-11-24','2026-11-30','2026-12-28','2027-01-22','2027-02-01','2027-02-26'],
-    hak:['2026-12-10','2026-12-19','2026-12-28','2027-01-15','2027-02-01','2027-02-26'],
-  },
   phases:[
     {from:'2026-10-27',haeng:7.5,beop:0,hak:0},
     {from:'2026-11-10',haeng:2.5,beop:5,hak:0},
@@ -281,6 +281,28 @@ const DEF={
     {from:'2026-12-29',haeng:2,beop:2.5,hak:3},
   ],
 };
+/* 회독 단계 (유휘운식 로드맵)
+   각 회독: t=단계, w=시간 비중(1회독=1), 마감=기준일(a:'s' 공부 시작일 / 'e' 시험 전날)+o일.
+   같은 마감을 가진 회독들은 한 단계로 묶여, 단계 마감까지 남은 회독을 비중대로 나눠 하루 목표를 정함. */
+const RTYPE={
+  scope:{n:'범위 확인',tip:'1시간 50~60문제 속도로 출제 범위만 확인. 막히면 넘김.'},
+  ox:{n:'O/X 도장깨기',tip:'문제 통풀이 금지. 지문(선지)마다 O/X 판별, 아는 지문은 표시 없이 넘기고 모르는 지문 앞에만 X.'},
+  del:{n:'삭제',tip:'3회 연속 맞혔거나 1년 지나도 안 틀릴 지문은 싸인펜으로 지움. 볼 분량이 회독마다 줄어야 함.'},
+  read:{n:'삭제 + 정독',tip:'지우고 남은 지문 회독 후 기본서/요약집 정독. 기출에 나온 개념이 도드라지게 읽힘.'},
+  one:{n:'단권화',tip:'메인 교재 1권 확정. 끝까지 안 외워지는 지문 페이지에 형광펜 + 포스트잇. 포스트잇 몰린 단원이 약점.'},
+  rot:{n:'단권화 회전',tip:'단권화 교재 전 범위 회전. 손으로 가리고 맞히기(인출). 회전 주기 16 → 8 → 4 → 2 → 1일.'},
+};
+const SUBTIP={beop:'숫자·기한·인원 요건은 정밀 체크해 단권화 교재에 모아 암기.',hak:'개정 법령 반영 교재로. 제연설비 계통도·열역학 공식은 원리부터 유도.',haeng:'타 시행처(국가직·지방직·군무원) 지문까지 지문 단위 O/X로 흡수.'};
+const ROT=[['rot',.3,'e',-15],['rot',.3,'e',-7],['rot',.3,'e',-3],['rot',.3,'e',-1],['rot',.3,'e',0]];
+const RD_DEF={
+  haeng:[['scope',1,'s',13],['ox',.8,'s',13],['ox',.8,'s',13],['del',.6,'s',34],['read',.5,'s',62],['one',.5,'e',-31],...ROT],
+  beop:[['scope',1,'s',34],['ox',.8,'s',34],['ox',.8,'s',34],['del',.6,'s',62],['one',.5,'e',-31],...ROT],
+  hak:[['scope',1,'s',62],['ox',.8,'s',62],['ox',.8,'s',62],['del',.6,'e',-31],['read',.5,'e',-31],...ROT],
+};
+const rdDefault=()=>Object.fromEntries(SUBS.map(s=>[s,RD_DEF[s].map(([t,w,a,o])=>({t,w,a,o}))]));
+const rEnd=r=>{const d=addD(r.a==='e'?END:START,r.o);return d<START?START:d>END?END:d};
+// 날짜를 고르면 시험에 가까운 날은 시험일 기준, 나머지는 시작일 기준으로 저장 → 시작일·시험일을 바꿔도 알맞게 따라감
+const toAnchor=d=>d>=addD(END,-45)?{a:'e',o:diff(d,END)}:{a:'s',o:diff(d,START)};
 const GATES={
   A:{t:'A. 행정법 → 법규 추가',off:13,items:['기출 3회독 완료','3회독 때 해설 없이 바로 맞힌 비율 75% 이상','목차만 보고 단원별 빈출 주제를 2~3개씩 말할 수 있음 (예: 행정행위의 하자, 행정절차, 행정쟁송)'],rates:[['r1','바로 맞힌 비율(행정법)',75]]},
   B:{t:'B. 법규 → 학개론 추가',off:34,items:['법규 기출 3회독 완료, 바로 맞힌 비율 75% 이상','4개 법령(기본법·소방시설법·화재예방법·위험물법)마다 빈출 숫자(기간·인원·과태료) 구분','행정법 정답률 85% 이상 유지'],rates:[['r1','바로 맞힌 비율(법규)',75],['r2','행정법 정답률',85]]},
@@ -288,10 +310,10 @@ const GATES={
 
 /* 상태 (이 브라우저 localStorage) */
 const KEY='fire123-planner-v2';
-const blank=()=>({v:2,updatedAt:0,pages:clone(DEF.pages),startAt:{},rounds:clone(DEF.rounds),phases:clone(DEF.phases),log:{},hours:{},off:{},todo:{},notes:{},gates:{},mocks:{}});
+const blank=()=>({v:2,updatedAt:0,pages:clone(DEF.pages),startAt:{},rd:rdDefault(),pi:{},ta:[],phases:clone(DEF.phases),log:{},hours:{},off:{},todo:{},notes:{},gates:{},mocks:{}});
 const norm=j=>Object.assign(blank(),j||{});
 // 기본 일정은 시험 2/27 기준으로 짜여 있어서, 시험일이 없는 데이터는 2/27에서 DEF_EXAM으로 옮김
-function adopt(j){S=norm(j);if(!S.start)S.start=DEF_START;if(S.exam)setup();else{S.exam=BASE_EXAM;setup();changeExam(DEF_EXAM)}}
+function adopt(j){S=norm(j);delete S.rounds;if(!S.start)S.start=DEF_START;if(S.exam)setup();else{S.exam=BASE_EXAM;setup();changeExam(DEF_EXAM)}}
 let S;
 (()=>{let j=null;try{j=JSON.parse(localStorage.getItem(KEY));if(!j||j.v!==2)j=null}catch(e){}adopt(j)})();
 function persist(){
@@ -319,6 +341,7 @@ function events(d){
   if(MOCK_F.includes(d))E.push({t:'실전 모의고사 75분 · 법규20 → 행정법25 → 학개론25 → 마킹5',h:1.25,m:1},{t:'채점 · 오답 분류 (개념/헷갈림/시간/마킹)',h:1.5});
   if(d===addD(START,GATES.A.off))E.push({t:'밤: 진입조건 A 점검',h:0});
   if(d===addD(START,GATES.B.off))E.push({t:'밤: 진입조건 B 점검',h:0});
+  if(d>=addD(END,-30)&&!MOCKS.includes(d))E.push({t:'시행처별 최신 기출 20분 타임어택 (과목 돌아가며 1과목)',h:0});
   if(dow(d)===(dow(START)+6)%7&&d<MOCK_START)E.push({t:'오후 2h 버퍼: 밀린 분량 보충 (없으면 △ 재회독)',h:0});
   return E;
 }
@@ -326,7 +349,6 @@ function tips(d){
   const T=[];
   if(d<=addD(START,6))T.push('한 문제 최대 60초. 이해 안 되면 ✕ 표시만 하고 넘김.','2시간마다 목표의 1/4 이상 넘겼는지 점검. 4시간에 절반이 안 되면 남은 시간은 해설만 읽는 모드.');
   if(d===addD(START,6))T.push('밤까지 못 끝내면 다음 날 오전에 완독. 남은 일정은 자동으로 다시 나눠집니다.');
-  if(d>=addD(MOCK_START,-7)&&d<MOCK_START)T.push('극단 압축 주간: △✕ 지문 위주로 오답 압축본 완성. 가장 약한 과목에 +1h.');
   if(MOCK_F.includes(d))T.push('실제 시험 시작 시각에 맞춰 풀기. 정확한 시간은 응시 공고로 확인.');
   if(MOCK_F.includes(d)&&d<addD(MOCK_START,7))T.push('모의고사 첫 주: 과목 순서 두 가지를 시험해 보고 다음 주부터 고정.');
   if(d>=addD(END,-3)&&!MOCK_F.includes(d))T.push('새 문제 금지. 최종 회독만.');
@@ -350,7 +372,7 @@ const pos0=(s,N)=>Math.min(Math.max(num((S.startAt||{})[s])||1,1),N)-1;
 function compute(){
   const R={};
   for(const s of SUBS){
-    const N=num(S.pages[s]),ends=S.rounds[s]||[];
+    const N=num(S.pages[s]),RD=S.rd[s]||[],ends=RD.map(rEnd);
     const H=ALL.map(d=>hrs(d,s)),D=ALL.map(d=>num(defHours(d)[s])||0);
     // 목표 계산용 시간: 기본 배정보다 더 넣은 시간은 재량이라 목표를 키우지 않음 (줄인 날은 줄인 만큼 반영)
     const HT=ALL.map((d,i)=>{const b=S.off[d]?0:(num(defHours(d)[s])||0);return b>0?Math.min(H[i],b):H[i]});
@@ -362,18 +384,28 @@ function compute(){
       const L=logOf(d,s),ls=L&&num(L.s),pb=pos,cumP=N?(round-1)*N+pos:0;
       if(N&&ls!=null)pos=Math.min(Math.max(ls,1),N)-1;
       const cum=N?(round-1)*N+pos:0;
+      let m=-1,E=null;
       if(N&&h>0){
-        k=ends.findIndex(e=>e>=d);
-        while(k>=0&&k<ends.length&&(k+1)*N-cum<=0)k++;
-        if(k>=0&&k<ends.length){
+        k=round-1;
+        if(k>=RD.length)t=0;
+        else{
+          // 단계: 현재 회독부터, 마감이 오늘 이후인 첫 회독의 마감일까지 (밀린 회독은 다음 단계에 합쳐짐)
+          const f=ends.findIndex((e,j)=>j>=k&&e>=d);
+          E=f<0?END:ends[f];
+          m=f<0?RD.length-1:ends.lastIndexOf(E);
+          // 남은 일 = 현재 회독의 남은 비율×비중 + 단계 안 나머지 회독 비중 합
+          let W=(1-pos/N)*(RD[k].w||1);for(let j=k+1;j<=m;j++)W+=RD[j].w||1;
           // 지난 날은 그 뒤 날들을 기본 시간으로 보고 계산 → 오늘 시간·쉬는 날을 바꿔도 지난 날 %가 변하지 않음
-          let Hs=HT[i];for(let j=i+1;j<ALL.length&&ALL[j]<=ends[k];j++)Hs+=d<TODAY?D[j]:HT[j];
-          t=Math.max(1,Math.ceil(((k+1)*N-cum)*HT[i]/Hs));
-        }else if(k>=ends.length)t=0;
+          let Hs=HT[i];for(let j=i+1;j<ALL.length&&ALL[j]<=E;j++)Hs+=d<TODAY?D[j]:HT[j];
+          // 오늘 몫(비중 단위)을 회독별 비중으로 페이지로 환산 (비중이 작은 회독일수록 같은 시간에 더 많은 페이지)
+          let u=W*HT[i]/Hs,p=0,kk=k,rem=N-pos;
+          while(u>1e-9&&kk<=m){const w=RD[kk].w||1,need=rem/N*w;if(u>=need){p+=rem;u-=need;kk++;rem=N}else{p+=u/w*N;u=0}}
+          t=Math.max(1,Math.ceil(p));
+        }
       }
       const startPg=N?pos+1:null;
       const a=countOf(L,N,startPg||1);
-      const rec={t,h,N,cum0:cum,round:N?round:null,startPg,planStart:N?pb+1:null,a,L,k};
+      const rec={t,h,N,cum0:cum,round:N?round:null,startPg,planStart:N?pb+1:null,a,L,k,m,E,rt:RD[round-1]};
       if(a!=null){const e=num(L.e);if(e<startPg)round++;pos=Math.min(e,N);rec.endRound=round}
       else if(N&&d>=TODAY&&t){pos+=t;while(pos>N){pos-=N;round++}}
       rec.after=N?(round-1)*N+pos:0;
@@ -461,18 +493,21 @@ function subRow(d,s){
   else if(r.h===0){info=`<div class="why">오늘은 배정 시간 없음${r.a?'':' · 시간을 넣으면 목표가 생깁니다'}</div>`;tgt=''}
   else if(r.t===0){info=`<div class="why">모든 회독 목표 달성</div>`;tgt=''}
   else{
-    const end=S.rounds[s][r.k];
+    const RD=S.rd[s],stage=RD.slice(r.k,r.m+1).map((x,j)=>`${r.k+j+1}회독`).join('·');
     const per=Math.ceil(r.t/r.h),cps=[];
     for(let i=1;i<r.h;i++)cps.push(i);
     cps.push(r.h);
     const cp=cps.map(x=>`<span><i>${x}h</i> ${((r.startPg-1+Math.ceil(r.t*x/r.h)-1)%N)+1}p</span>`).join('');
-    info=`<div class="rg">${rangeTxt(r)}</div><div class="cps" aria-label="시간별 도달 페이지">${cp}</div><div class="why">${r.k+1}회독 마감 ${md(end)} · 마감까지 남은 ${(r.k+1)*N-r.cum0}p를 시간 비율로 나눔</div>`;
+    info=`<div class="rg">${rangeTxt(r)}</div><div class="cps" aria-label="시간별 도달 페이지">${cp}</div><div class="why">${stage} → ${md(r.E)}까지 · 남은 회독을 시간 비중(${RD.slice(r.k,r.m+1).map(x=>x.w).join(' : ')})대로 나눔</div>`;
     tgt=`<b>${per}p<small>/h</small></b><span>오늘 ${r.t}p · ${r.h}h</span><span>1p당 ${fmtSec(r.h*3600/r.t)}</span>`;
   }
   let res='';
   if(r.a!=null)res=`<span class="res ${rcls(r.t?r.a/r.t:1)}">${actTxt(r)} (${r.a}p)${r.t?` · ${pct(r.a/r.t)} · <b class="${gapCls(r.gap)}">${gapTxt(r.gap)}</b>`:''}${r.h?` · 실제 시간당 ${Math.round(r.a/r.h)}p`:''}</span>`;
   else if(L.s!=null&&r.t)res=`<span class="res muted">${L.s}p부터 시작 → 끝 p를 입력하세요</span>`;
   else if(N&&r.t&&d<TODAY)res='<span class="res r-b">기록 없음 · 0p로 계산됨</span>';
+  const ty=r.rt&&RTYPE[r.rt.t];
+  if(ty&&N&&r.h>0)info=`<div class="stg">${r.round}회독 · ${ty.n}</div>${info}<div class="why tipl">${ty.tip}${['ox','del','one'].includes(r.rt.t)?' '+SUBTIP[s]:''}</div>`;
+  const piOn=ty&&['read','one','rot'].includes(r.rt.t);
   return `<div class="sub s-${s}${r.h===0&&r.a==null?' zero':''}" style="--p:${p}">
     <div class="n">${SN[s]}${N?`<small>총 ${N}p</small>`:''}</div>
     <div class="info">${info}</div>
@@ -481,6 +516,7 @@ function subRow(d,s){
       <label class="lg">시작 p <input type="number" inputmode="numeric" min="1" id="${id('s')}" data-f="log" data-k="s" ${at} value="${L.s??''}" placeholder="${r.startPg??''}"></label>
       <label class="lg">끝 p <input type="number" inputmode="numeric" min="1" id="${id('e')}" data-f="log" data-k="e" ${at} value="${L.e??''}" placeholder="${r.t&&r.startPg?((r.startPg+r.t-2)%N)+1:''}"></label>
       <label class="lg">시간 <input class="h" type="number" inputmode="decimal" step="0.25" min="0" id="${id('h')}" data-f="hrs" ${at} value="${r.h}">h</label>
+      ${piOn?`<label class="lg">포스트잇 <input class="h" type="number" inputmode="numeric" min="0" id="${id('pi')}" data-f="log" data-k="pi" ${at} value="${L.pi??''}">개</label>`:''}
       ${res}
     </div></div>`;
 }
@@ -543,11 +579,12 @@ function vAll(){
 }
 
 function vPlan(){
-  let h=`<div class="sec"><div><h2>회독 계획</h2><p class="muted" style="margin:4px 0 0">모든 회독은 기출 전체 페이지를 한 바퀴 도는 것으로 계산합니다. 총 페이지, 회독 마감일, 하루 시간을 바꾸면 모든 날의 범위와 목표가 바로 다시 계산됩니다.</p></div>
-  <div class="box"><h3>공부 기간</h3><div class="inline"><label>공부 시작일 <input class="tin" type="date" id="start" data-f="start" value="${START}" max="${addD(EXAM,-60)}"></label><span class="muted small">바꾸면 앞쪽 회독 마감일·기간별 시간·진입조건 점검일이 함께 이동합니다. 주차는 시작 요일부터 7일씩 끊습니다.</span></div><div class="inline"><label>시험 날짜 <input class="tin" type="date" id="exam" data-f="exam" value="${EXAM}" min="${addD(START,60)}"></label><span class="muted small">바꾸면 마지막 5주(극단 압축·모의고사 기간)와 그 안의 회독 마감일이 시험일에 맞춰 함께 이동합니다. 실전 모의는 ${md(MOCK_START)}부터, 계획 마지막 날은 시험 전날 ${md(END)}입니다.</span></div></div>
+  let h=`<div class="sec"><div><h2>회독 계획</h2><p class="muted" style="margin:4px 0 0">회독마다 교재 1쪽부터 끝까지 한 바퀴 돕니다. 마감일이 같은 회독끼리 한 단계로 묶이고, 단계 마감까지 남은 회독을 시간 비중대로 나눕니다. 비중이 작을수록(지운 지문이 많을수록) 같은 시간에 더 많은 페이지를 넘깁니다. 앞서가면 뒤 회독들이 고르게 여유를 가져갑니다.</p></div>
+  <div class="box"><h3>공부 기간</h3><div class="inline"><label>공부 시작일 <input class="tin" type="date" id="start" data-f="start" value="${START}" max="${addD(EXAM,-60)}"></label><span class="muted small">바꾸면 앞쪽 회독 마감일·기간별 시간·진입조건 점검일이 함께 이동합니다. 주차는 시작 요일부터 7일씩 끊습니다.</span></div><div class="inline"><label>시험 날짜 <input class="tin" type="date" id="exam" data-f="exam" value="${EXAM}" min="${addD(START,60)}"></label><span class="muted small">바꾸면 단권화 회전(D-31~), 모의고사 기간, 그 무렵의 회독 마감일이 시험일에 맞춰 함께 이동합니다. 실전 모의는 ${md(MOCK_START)}부터, 계획 마지막 날은 시험 전날 ${md(END)}입니다.</span></div></div>
   <div class="plans">`;
   for(const s of SUBS){
-    const N=num(S.pages[s]),ends=S.rounds[s],dn=P[s].done;
+    const N=num(S.pages[s]),RD=S.rd[s],ends=RD.map(rEnd),dn=P[s].done;
+    const piSum=Object.values(S.log).reduce((a,L)=>a+(num(L[s]&&L[s].pi)||0),0);
     h+=`<div class="plan s-${s}"><h3>${SN[s]} 기출</h3>
       <label class="tot">총 페이지 <input type="number" min="1" inputmode="numeric" id="pg-${s}" data-f="pages" data-s="${s}" value="${N??''}" placeholder="입력">p</label>
       <label class="tot">1회독 시작 페이지 <input type="number" min="1" inputmode="numeric" id="sa-${s}" data-f="startAt" data-s="${s}" value="${S.startAt[s]??''}" placeholder="1">p</label>
@@ -555,10 +592,11 @@ function vPlan(){
         const done=N?Math.max(0,Math.min(N,dn-k*N)):0;
         const proj=N?ALL.find(d=>{const x=P[s][d];return x.after>=(k+1)*N}):null;
         const st=!N?'':done>=N?'완료':e<TODAY?`마감 지남 · ${done}/${N}p`:done>0?`진행 중 ${done}/${N}p`:'예정';
-        return `<div class="rd"><span class="k">${k+1}회독</span><input type="date" id="rd-${s}-${k}" data-f="rend" data-s="${s}" data-k="${k}" value="${e}" min="${START}" max="${END}" aria-label="${k+1}회독 마감일"><button data-act="rdel" data-s="${s}" data-k="${k}">삭제</button>
-          <span class="st">${k===0?'시작':md(addD(ends[k-1],1))} ~ ${md(e)} 마감${st?' · '+st:''}${proj&&done<N?` · 예상 완료 ${md(proj)}`:''}</span>
+        const R=RD[k],newStage=k===0||ends[k-1]!==e;
+        return `<div class="rd${newStage?' ns':''}"><span class="k">${k+1}회독</span><span class="ctl"><select id="rt-${s}-${k}" data-f="rtype" data-s="${s}" data-k="${k}" aria-label="단계">${Object.entries(RTYPE).map(([v,x])=>`<option value="${v}"${v===R.t?' selected':''}>${x.n}</option>`).join('')}</select><input class="w" type="number" step="0.1" min="0.1" id="rw-${s}-${k}" data-f="rw" data-s="${s}" data-k="${k}" value="${R.w}" title="시간 비중 (1회독=1)" aria-label="시간 비중"><input type="date" id="rd-${s}-${k}" data-f="rend" data-s="${s}" data-k="${k}" value="${e}" min="${START}" max="${END}" aria-label="${k+1}회독 단계 마감일"></span><button data-act="rdel" data-s="${s}" data-k="${k}">삭제</button>
+          <span class="st">마감 ${md(e)}${st?' · '+st:''}${proj&&done<N?` · 예상 완료 ${md(proj)}`:''}</span>
           <div class="bar"><i style="width:${N?done/N*100:0}%"></i></div></div>`}).join('')}</div>
-      <div><button class="btn" data-act="radd" data-s="${s}">+ 회독 추가</button></div></div>`;
+      <div class="inline"><button class="btn" data-act="radd" data-s="${s}">+ 회독 추가</button><span class="muted small">포스트잇 누적 ${piSum}개</span></div></div>`;
   }
   h+=`</div><div><h2>기간별 하루 시간</h2><p class="muted small" style="margin:4px 0 0">시작일부터 다음 기간 전까지 매일 적용됩니다. 모의고사 날은 과목당 1.5h(주말 모의 날은 학개론 2h)로 따로 잡힙니다. 특정 날만 바꾸려면 일자별 탭의 시간 칸을 고치세요.</p></div>
   <div class="tw"><table><thead><tr><th>시작일</th><th>행정법 h</th><th>법규 h</th><th>학개론 h</th><th>합계</th><th></th></tr></thead><tbody>
@@ -589,15 +627,20 @@ function vMocks(){
   return `<div class="sec"><div><h2>모의고사 기록</h2><p class="muted" style="margin:4px 0 0">주말 모의 ${MOCK_J.length}회(${MOCK_J.map(md).join(', ')}) + 실전 ${MOCK_F.length}회(${md(MOCK_START)}~). 점수를 넣으면 다음 날부터 최저 과목 +1h 안내가 뜹니다.</p></div>${spark}
   <div class="tw"><table><thead><tr><th>날짜</th><th>법규</th><th>행정법</th><th>학개론</th><th>평균</th><th>개념</th><th>헷갈림</th><th>시간</th><th>마킹</th><th>과목 순서 · 메모</th></tr></thead><tbody>
   ${rows.map(({d,m,avg})=>`<tr${d===TODAY?' class="today"':''}><td class="date">${md(d)} ${WD[dow(d)]}</td>${['beop','haeng','hak'].map(k=>`<td>${inp(d,k,m[k])}</td>`).join('')}<td class="num">${avg??'–'}</td>${['c1','c2','c3','c4'].map(k=>`<td>${inp(d,k,m[k])}</td>`).join('')}<td><input class="tin" id="mm-${d}-memo" data-f="mock" data-d="${d}" data-k="memo" value="${esc(m.memo)}" placeholder="법→행→학" style="min-width:140px"></td></tr>`).join('')}
-  </tbody></table></div></div>`;
+  </tbody></table></div>
+  <div><h2>시행처별 20분 타임어택</h2><p class="muted" style="margin:4px 0 0">D-30부터 최신 3개년 시행처별 기출을 20분씩. 안다고 착각한 구멍 지문을 솎아내는 용도입니다.</p></div>
+  <div class="tw"><table><thead><tr><th>날짜</th><th>과목</th><th>시행처 · 연도</th><th>점수</th><th>틀린 지문 메모</th><th></th></tr></thead><tbody>
+  ${(S.ta||[]).map((x,i)=>`<tr><td><input class="tin" type="date" id="ta-${i}-d" data-f="ta" data-i="${i}" data-k="d" value="${x.d||''}"></td><td><select class="tin" id="ta-${i}-s" data-f="ta" data-i="${i}" data-k="s">${SUBS.map(s=>`<option value="${s}"${s===x.s?' selected':''}>${SN[s]}</option>`).join('')}</select></td><td><input class="tin" id="ta-${i}-src" data-f="ta" data-i="${i}" data-k="src" value="${esc(x.src)}" placeholder="예: 2025 국가직"></td><td><input class="tin n" type="number" min="0" max="100" id="ta-${i}-sc" data-f="ta" data-i="${i}" data-k="sc" value="${x.sc??''}"></td><td><input class="tin" id="ta-${i}-m" data-f="ta" data-i="${i}" data-k="m" value="${esc(x.m)}" style="min-width:160px"></td><td><button class="btn ghost" data-act="tadel" data-i="${i}">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">아직 기록이 없습니다. 아래 버튼으로 추가하세요.</td></tr>'}
+  </tbody></table></div><div><button class="btn" data-act="taadd">+ 타임어택 기록</button></div></div>`;
 }
 
 function vRules(){
   return `<div class="sec"><h2>운영 규칙</h2><div class="rules">
+  <div class="box"><h3>기출 회독 · 단권화 로드맵</h3><ul><li>범위 확인: 1시간 50~60문제, 과목당 1주 컷</li><li>2~3회독: 한 과목씩 도장깨기, 지문 단위 O/X, 모르는 지문만 X</li><li>4~5회독: 아는 지문 삭제 + 기본서/요약집 정독</li><li>단권화: 메인 1권, 노답 지문에 포스트잇 (몰린 단원 = 약점)</li><li>D-31~전날: 단권화 회전 16 → 8 → 4 → 2 → 1일, 시행처별 20분 타임어택, 가리고 맞히기</li></ul></div>
   <div class="box"><h3>자동 재계획</h3><ul><li>매일 과목별 시작 p와 끝 p를 입력하면 본 페이지 수가 계산됩니다. 시작 p를 비우면 계획된 시작 페이지로 봅니다.</li><li>지난 날을 비워 두면 0p로 계산되어 마감까지 남은 날에 다시 나눠집니다.</li><li>앞서 나가면 다음 회독 분량이 미리 배정됩니다.</li><li>쉬는 날로 표시하면 그날 분량이 다른 날로 옮겨집니다.</li></ul></div>
   <div class="box"><h3>일일 · 주간 기준</h3><ul><li>하루 기준 7.5h (최소 7h, 최대 8h)</li><li>주차는 ${WD[dow(START)]}요일 시작 → ${WD[(dow(START)+6)%7]}요일 끝, 마지막 날 오후 2h는 버퍼</li><li>달성률 80% 미만: 다음 날 익숙한 과목 1h를 줄여 미달 과목에</li><li>주간 미달 20% 초과: 다음 주 가장 익숙한 과목을 50% 줄여 만회</li></ul></div>
   <div class="box"><h3>모의고사 날 (7.5h)</h3><ul><li>실제 시험 시각에 3과목 한 번에, 75분: 법규 20 → 행정법 25 → 학개론 25 → 마킹 5</li><li>채점 · 오답 분류 1.5h: 개념 / 헷갈림 / 시간 / 마킹</li><li>회독 과목당 1.5h, 틀린 지문은 압축본에 추가</li></ul></div>
-  <div class="box"><h3>고정일 (절대 미루지 않음)</h3><ul><li>극단 압축 시작 ${md(addD(MOCK_START,-7))}</li><li>모의고사 기간 시작 ${md(MOCK_START)}</li><li>시험 ${md(EXAM)}</li></ul></div>
+  <div class="box"><h3>고정일 (절대 미루지 않음)</h3><ul><li>단권화 회전 시작 ${md(addD(END,-30))} (16 → 8 → 4 → 2 → 1일)</li><li>모의고사 기간 시작 ${md(MOCK_START)}</li><li>시험 ${md(EXAM)}</li></ul></div>
   </div>
   <h2>백업</h2>
   <div class="box"><p class="muted" style="margin:0">기록은 이 브라우저에 저장되어 페이지가 업데이트되어도 그대로 남습니다. 다른 기기로 옮기거나 브라우저 데이터를 지울 때는 백업 파일을 저장해 두세요.</p>
@@ -615,9 +658,11 @@ document.addEventListener('click',e=>{
   if(a==='wk'){const w=wk(sel)+ +b.dataset.n;sel=ALL.find(x=>wk(x)===w)||sel;render();return}
   if(a==='tdadd'){(S.todo[d]||(S.todo[d]=[])).push({t:'',done:false});focusNext=`td-${d}-${S.todo[d].length-1}-t`;persist();render();return}
   if(a==='tddel'){S.todo[d].splice(i,1);if(!S.todo[d].length)delete S.todo[d];persist();render();return}
-  if(a==='radd'){const r=S.rounds[s];r.push(r.length?r.at(-1):END);persist();render();return}
-  if(a==='rdel'){if(S.rounds[s].length<=1)return;S.rounds[s].splice(k,1);persist();render();return}
+  if(a==='radd'){const r=S.rd[s];r.push(r.length?{...r.at(-1)}:{t:'rot',w:.3,a:'e',o:0});persist();render();return}
+  if(a==='rdel'){if(S.rd[s].length<=1)return;S.rd[s].splice(k,1);persist();render();return}
   if(a==='phadd'){const l=S.phases.at(-1);S.phases.push({...l,from:addD(l.from,7)>END?END:addD(l.from,7)});S.phases.sort((x,y)=>x.from<y.from?-1:1);persist();render();return}
+  if(a==='taadd'){(S.ta||(S.ta=[])).push({d:TODAY,s:'haeng',src:'',sc:null,m:''});persist();render();return}
+  if(a==='tadel'){S.ta.splice(i,1);persist();render();return}
   if(a==='phdel'){S.phases.splice(i,1);persist();render();return}
   if(a==='dl'){
     const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
@@ -658,10 +703,13 @@ V.addEventListener('change',e=>{
   else if(f==='exam'){if(!el.value||el.value<=addD(START,30))return;changeExam(el.value);if(sel>END)sel=END}
   else if(f==='pages')S.pages[s]=num(el.value);
   else if(f==='startAt'){const v=num(el.value);if(v==null||v===1)delete S.startAt[s];else S.startAt[s]=v}
-  else if(f==='rend'){if(!el.value)return;S.rounds[s][+k]=el.value;S.rounds[s].sort()}
+  else if(f==='rend'){if(!el.value||el.value<START||el.value>END)return;Object.assign(S.rd[s][+k],toAnchor(el.value));S.rd[s].sort((x,y)=>rEnd(x)<rEnd(y)?-1:rEnd(x)>rEnd(y)?1:0)}
+  else if(f==='rtype')S.rd[s][+k].t=el.value;
+  else if(f==='rw'){const v=num(el.value);if(v==null||v<=0)return;S.rd[s][+k].w=v}
   else if(f==='ph'){const p=S.phases[i];if(k==='from'){if(!el.value)return;p.from=el.value;S.phases.sort((x,y)=>x.from<y.from?-1:1)}else p[k]=num(el.value)??0}
   else if(f==='mock'){const m=S.mocks[d]||(S.mocks[d]={});if(k==='memo')m.memo=el.value;else{const v=num(el.value);if(v==null)delete m[k];else m[k]=v}}
   else if(f==='gate'){const g=S.gates[el.dataset.g]||(S.gates[el.dataset.g]={});(g.c||(g.c=[]))[+k]=el.checked}
+  else if(f==='ta'){const x=S.ta[i];x[k]=k==='sc'?num(el.value):el.value}
   else if(f==='grate'){const g=S.gates[el.dataset.g]||(S.gates[el.dataset.g]={});g[k]=num(el.value)}
   persist();later();
 });
