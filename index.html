@@ -502,7 +502,7 @@ function subRow(d,s){
     tgt=`<b>${per}p<small>/h</small></b><span>오늘 ${r.t}p · ${r.h}h</span><span>1p당 ${fmtSec(r.h*3600/r.t)}</span>`;
   }
   let res='';
-  if(r.a!=null)res=`<span class="res ${rcls(r.t?r.a/r.t:1)}">${actTxt(r)} (${r.a}p)${r.t?` · ${pct(r.a/r.t)} · <b class="${gapCls(r.gap)}">${gapTxt(r.gap)}</b>`:''}${r.h?` · 실제 시간당 ${Math.round(r.a/r.h)}p`:''}</span>`;
+  if(r.a!=null)res=`<span class="res ${rcls(r.t?r.a/r.t:1)}">${actTxt(r)} (${r.a}p)${r.t?` · ${pct(r.a/r.t)} · <b class="${gapCls(r.gap)}">${gapTxt(r.gap)}</b>`:''}${(num(L.ah)||r.h)?` · 실제 시간당 ${Math.round(r.a/(num(L.ah)||r.h))}p`:''}</span>`;
   else if(L.s!=null&&r.t)res=`<span class="res muted">${L.s}p부터 시작 → 끝 p를 입력하세요</span>`;
   else if(N&&r.t&&d<TODAY)res='<span class="res r-b">기록 없음 · 0p로 계산됨</span>';
   const ty=r.rt&&RTYPE[r.rt.t];
@@ -515,7 +515,8 @@ function subRow(d,s){
     <div class="log">
       <label class="lg">시작 p <input type="number" inputmode="numeric" min="1" id="${id('s')}" data-f="log" data-k="s" ${at} value="${L.s??''}" placeholder="${r.startPg??''}"></label>
       <label class="lg">끝 p <input type="number" inputmode="numeric" min="1" id="${id('e')}" data-f="log" data-k="e" ${at} value="${L.e??''}" placeholder="${r.t&&r.startPg?((r.startPg+r.t-2)%N)+1:''}"></label>
-      <label class="lg">시간 <input class="h" type="number" inputmode="decimal" step="0.25" min="0" id="${id('h')}" data-f="hrs" ${at} value="${r.h}">h</label>
+      <label class="lg" title="목표 페이지를 정하는 시간입니다">계획 <input class="h" type="number" inputmode="decimal" step="0.25" min="0" id="${id('h')}" data-f="hrs" ${at} value="${r.h}">h</label>
+      <label class="lg" title="실제로 걸린 시간입니다. 목표와 달성률에 영향을 주지 않습니다">실제 <input class="h" type="number" inputmode="decimal" step="0.25" min="0" id="${id('ah')}" data-f="log" data-k="ah" ${at} value="${L.ah??''}" placeholder="${r.h}">h</label>
       ${piOn?`<label class="lg">포스트잇 <input class="h" type="number" inputmode="numeric" min="0" id="${id('pi')}" data-f="log" data-k="pi" ${at} value="${L.pi??''}">개</label>`:''}
       ${res}
     </div></div>`;
@@ -637,7 +638,7 @@ function vMocks(){
 function vRules(){
   return `<div class="sec"><h2>운영 규칙</h2><div class="rules">
   <div class="box"><h3>기출 회독 · 단권화 로드맵</h3><ul><li>범위 확인: 1시간 50~60문제, 과목당 1주 컷</li><li>2~3회독: 한 과목씩 도장깨기, 지문 단위 O/X, 모르는 지문만 X</li><li>4~5회독: 아는 지문 삭제 + 기본서/요약집 정독</li><li>단권화: 메인 1권, 노답 지문에 포스트잇 (몰린 단원 = 약점)</li><li>D-31~전날: 단권화 회전 16 → 8 → 4 → 2 → 1일, 시행처별 20분 타임어택, 가리고 맞히기</li></ul></div>
-  <div class="box"><h3>자동 재계획</h3><ul><li>매일 과목별 시작 p와 끝 p를 입력하면 본 페이지 수가 계산됩니다. 시작 p를 비우면 계획된 시작 페이지로 봅니다.</li><li>지난 날을 비워 두면 0p로 계산되어 마감까지 남은 날에 다시 나눠집니다.</li><li>앞서 나가면 다음 회독 분량이 미리 배정됩니다.</li><li>쉬는 날로 표시하면 그날 분량이 다른 날로 옮겨집니다.</li></ul></div>
+  <div class="box"><h3>자동 재계획</h3><ul><li>매일 과목별 시작 p와 끝 p를 입력하면 본 페이지 수가 계산됩니다. 시작 p를 비우면 계획된 시작 페이지로 봅니다.</li><li>지난 날을 비워 두면 0p로 계산되어 마감까지 남은 날에 다시 나눠집니다.</li><li>앞서 나가면 다음 회독 분량이 미리 배정됩니다.</li><li>쉬는 날로 표시하면 그날 분량이 다른 날로 옮겨집니다.</li><li>달성률은 페이지로만 계산합니다. 시간이 더 걸렸으면 실제 칸에 적으세요. 계획 칸을 바꾸면 목표 페이지가 바뀝니다.</li></ul></div>
   <div class="box"><h3>일일 · 주간 기준</h3><ul><li>하루 기준 7.5h (최소 7h, 최대 8h)</li><li>주차는 ${WD[dow(START)]}요일 시작 → ${WD[(dow(START)+6)%7]}요일 끝, 마지막 날 오후 2h는 버퍼</li><li>달성률 80% 미만: 다음 날 익숙한 과목 1h를 줄여 미달 과목에</li><li>주간 미달 20% 초과: 다음 주 가장 익숙한 과목을 50% 줄여 만회</li></ul></div>
   <div class="box"><h3>모의고사 날 (7.5h)</h3><ul><li>실제 시험 시각에 3과목 한 번에, 75분: 법규 20 → 행정법 25 → 학개론 25 → 마킹 5</li><li>채점 · 오답 분류 1.5h: 개념 / 헷갈림 / 시간 / 마킹</li><li>회독 과목당 1.5h, 틀린 지문은 압축본에 추가</li></ul></div>
   <div class="box"><h3>고정일 (절대 미루지 않음)</h3><ul><li>단권화 회전 시작 ${md(addD(END,-30))} (16 → 8 → 4 → 2 → 1일)</li><li>모의고사 기간 시작 ${md(MOCK_START)}</li><li>시험 ${md(EXAM)}</li></ul></div>
