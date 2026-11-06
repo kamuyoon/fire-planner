@@ -714,6 +714,19 @@ V.addEventListener('change',e=>{
   else if(f==='grate'){const g=S.gates[el.dataset.g]||(S.gates[el.dataset.g]={});g[k]=num(el.value)}
   persist();later();
 });
+// 빈 숫자 칸은 안내값(placeholder)을 채워 두고 시작 → 화살표·휠·스핀 버튼이 0이 아니라 그 값에서 움직임. 안 건드리면 다시 비움
+const stepInput=el=>el.matches&&el.matches('input[type=number]')&&el.placeholder!==''&&!isNaN(+el.placeholder);
+V.addEventListener('focusin',e=>{
+  const el=e.target;
+  if(!stepInput(el)||el.value!=='')return;
+  el.value=el.placeholder;el.dataset.pre='1';el.select();
+});
+V.addEventListener('input',e=>{if(e.target.dataset.pre){delete e.target.dataset.pre;e.target.dataset.moved='1'}});
+V.addEventListener('focusout',e=>{
+  const el=e.target;
+  if(el.dataset.pre){delete el.dataset.pre;el.value=''}
+  else if(el.dataset.moved){delete el.dataset.moved;el.dispatchEvent(new Event('change',{bubbles:true}))}
+});
 V.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('input:not([type=checkbox])'))e.target.blur()});
 render();
 </script>
